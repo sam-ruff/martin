@@ -26,6 +26,7 @@ webui = ["martin/webui"]
 martin = { path = "../martin", default-features = false }
 
 [dev-dependencies]
+reqwest.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tracing.workspace = true
 
