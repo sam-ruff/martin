@@ -4821,6 +4821,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "martin-embedded"
+version = "0.1.0"
+dependencies = [
+ "martin",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "martin-tile-utils"
 version = "0.7.4"
 dependencies = [

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["martin", "martin-core", "martin-tile-utils", "mbtiles"]
+members = ["martin", "martin-core", "martin-embedded", "martin-tile-utils", "mbtiles"]
 
 [workspace.package]
 edition = "2024"
