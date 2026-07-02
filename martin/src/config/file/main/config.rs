@@ -60,6 +60,11 @@ pub struct ServerState {
     #[cfg(feature = "_tiles")]
     pub tile_manager: TileSourceManager,
 
+    /// The shared `PMTiles` directory cache, retained so embedders can
+    /// invalidate it when a tiles file is replaced on disk.
+    #[cfg(feature = "pmtiles")]
+    pub pmtiles_cache: martin_core::tiles::pmtiles::PmtCache,
+
     #[cfg(feature = "sprites")]
     pub sprites: martin_core::sprites::SpriteSources,
     #[cfg(feature = "sprites")]

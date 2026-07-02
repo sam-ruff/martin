@@ -18,7 +18,7 @@ async fn serves_catalog_and_tiles() {
     config.srv.listen_addresses = Some(ADDR.to_string());
     config.pmtiles = FileConfigEnum::new(vec![fixture()]);
 
-    let (server, addr) = martin_embedded::start(config).await.unwrap();
+    let (server, addr, _invalidator) = martin_embedded::start(config).await.unwrap();
     assert_eq!(addr, ADDR);
 
     // The server future is not Send, so run it and the assertions on the same task.

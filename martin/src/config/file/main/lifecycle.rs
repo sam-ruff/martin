@@ -207,7 +207,7 @@ impl Config {
             .resolve_tile_sources(
                 idr,
                 #[cfg(feature = "pmtiles")]
-                pmtiles_cache,
+                pmtiles_cache.clone(),
             )
             .await?;
 
@@ -244,6 +244,9 @@ impl Config {
                 self.on_invalid.unwrap_or_default(),
                 tile_sources_with_process,
             ),
+
+            #[cfg(feature = "pmtiles")]
+            pmtiles_cache,
 
             #[cfg(feature = "sprites")]
             sprites: self.sprites.resolve()?,

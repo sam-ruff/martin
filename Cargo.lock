@@ -4825,6 +4825,7 @@ name = "martin-embedded"
 version = "0.1.0"
 dependencies = [
  "martin",
+ "martin-core",
  "reqwest 0.12.28",
  "tokio",
  "tracing",
