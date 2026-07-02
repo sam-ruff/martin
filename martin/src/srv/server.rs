@@ -217,6 +217,7 @@ pub fn new_server(
 
     let keep_alive = Duration::from_secs(config.keep_alive.unwrap_or(DEFAULT_KEEP_ALIVE));
     let worker_processes = config.worker_processes.unwrap_or_else(num_cpus::get);
+    let disable_signals = config.disable_signals.unwrap_or(false);
     let listen_addresses = config
         .listen_addresses
         .clone()
@@ -273,9 +274,15 @@ pub fn new_server(
         .map_err(|e| MartinError::BindingError(e, listen_addresses.clone()))?
         .keep_alive(keep_alive)
         .shutdown_timeout(0)
-        .workers(worker_processes)
-        .run()
-        .err_into();
+        .workers(worker_processes);
+    // Embedders that drive the returned future themselves own process
+    // shutdown; installing actix's handlers would race theirs.
+    let server = if disable_signals {
+        server.disable_signals()
+    } else {
+        server
+    };
+    let server = server.run().err_into();
 
     Ok((Box::pin(server), listen_addresses))
 }
