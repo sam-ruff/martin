@@ -45,13 +45,18 @@ pub struct CacheInvalidator {
 impl CacheInvalidator {
     /// Drop cached tiles for `source_id`. The `PMTiles` directory cache is
     /// cleared entirely (directories are re-read lazily and cheaply) because
-    /// its entries are not addressable per source.
-    pub fn invalidate_source(&self, source_id: &str) {
+    /// its entries are not addressable per source. Pending cache maintenance
+    /// is flushed before returning, so subsequent reads see fresh content.
+    pub async fn invalidate_source(&self, source_id: &str) {
         if let Some(cache) = &self.tiles {
             cache.invalidate_source(source_id);
+            cache.run_pending_tasks().await;
         }
         #[cfg(feature = "pmtiles")]
-        self.pmtiles_directories.invalidate_all();
+        {
+            self.pmtiles_directories.invalidate_all();
+            self.pmtiles_directories.run_pending_tasks().await;
+        }
     }
 }
 
