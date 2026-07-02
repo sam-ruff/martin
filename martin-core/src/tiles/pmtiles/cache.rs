@@ -20,6 +20,14 @@ pub const NO_PMT_CACHE: OptPmtCache = None;
 pub struct PmtCache(Cache<PmtCacheKey, pmtiles::Directory>);
 
 impl PmtCache {
+    /// Invalidates every cached directory, e.g. after a `PMTiles` file was
+    /// replaced on disk. Eviction is asynchronous; directories are re-read
+    /// lazily on the next tile request.
+    pub fn invalidate_all(&self) {
+        self.0.invalidate_all();
+        info!("Invalidated all PMTiles directory cache entries");
+    }
+
     /// Creates a new `PMTiles` directory cache instance
     #[must_use]
     pub fn new(

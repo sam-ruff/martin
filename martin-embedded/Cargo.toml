@@ -11,19 +11,20 @@ homepage.workspace = true
 
 [features]
 default = ["mbtiles", "pmtiles", "fonts", "sprites", "styles"]
-mbtiles = ["martin/mbtiles"]
-pmtiles = ["martin/pmtiles"]
+mbtiles = ["martin/mbtiles", "martin-core/mbtiles"]
+pmtiles = ["martin/pmtiles", "martin-core/pmtiles"]
 fonts = ["martin/fonts"]
 sprites = ["martin/sprites"]
 styles = ["martin/styles"]
-geojson = ["martin/geojson"]
-postgres = ["martin/postgres"]
+geojson = ["martin/geojson", "martin-core/geojson"]
+postgres = ["martin/postgres", "martin-core/postgres"]
 metrics = ["martin/metrics"]
 # Requires npm at build time
 webui = ["martin/webui"]
 
 [dependencies]
 martin = { path = "../martin", default-features = false }
+martin-core = { path = "../martin-core", default-features = false }
 
 [dev-dependencies]
 reqwest.workspace = true

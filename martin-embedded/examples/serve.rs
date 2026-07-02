@@ -22,7 +22,7 @@ async fn main() -> MartinResult<()> {
     config.srv.listen_addresses = Some("127.0.0.1:3111".to_string());
     config.pmtiles = FileConfigEnum::new(vec![path]);
 
-    let (server, addr) = martin_embedded::start(config).await?;
+    let (server, addr, _invalidator) = martin_embedded::start(config).await?;
     tracing::info!("catalog at http://{addr}/catalog");
     server.await
 }

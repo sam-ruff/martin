@@ -12,7 +12,7 @@ Everything is re-exported from this crate; consumers do not need to depend on
 `martin` directly.
 
 - `load_config(path)` - read a martin YAML config file with `${ENV_VAR}` substitution
-- `start(config)` - resolve sources and bind; returns `(ServerFuture, bound_addr)`
+- `start(config)` - resolve sources and bind; returns `(ServerFuture, bound_addr, CacheInvalidator)`. Call `CacheInvalidator::invalidate_source(id)` after replacing a tile file on disk so the swapped source serves fresh content while other sources stay cached
 - `serve(config)` - start and run until the server exits
 - Re-exports: `Config`, `FileConfigEnum`, `read_config`, `MartinError`,
   `MartinResult`, and martin's `config` and `logging` modules
