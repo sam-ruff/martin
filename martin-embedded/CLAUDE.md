@@ -27,6 +27,9 @@ Programmatic config example:
 ```rust
 let mut config = martin_embedded::Config::default();
 config.srv.listen_addresses = Some("127.0.0.1:3000".into());
+// Host apps that own shutdown should keep actix's process-wide SIGINT/SIGTERM
+// handlers out of the way and stop the server future themselves.
+config.srv.disable_signals = Some(true);
 config.mbtiles = martin_embedded::FileConfigEnum::new(vec!["maps/world.mbtiles".into()]);
 martin_embedded::serve(config).await?;
 ```

@@ -58,6 +58,11 @@ pub struct SrvConfig {
     /// Defaults to `cors: true`, which allows all origins.
     /// Sending/Acting on CORS headers can be completely disabled via `cors: false`
     pub cors: Option<CorsConfig>,
+    /// Skip installing actix-web's process-wide signal handlers (SIGINT/SIGTERM). \[default: false\]
+    ///
+    /// For embedding martin inside a host application that owns process
+    /// shutdown itself and stops the returned server future directly.
+    pub disable_signals: Option<bool>,
     /// Advanced monitoring options
     #[cfg(feature = "metrics")]
     pub observability: Option<ObservabilityConfig>,
