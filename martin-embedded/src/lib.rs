@@ -18,10 +18,10 @@ use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
 
+use martin::TileSourceManager;
 use martin::config::primitives::IdResolver;
 use martin::config::primitives::env::OsEnv;
 use martin::srv::{RESERVED_KEYWORDS, new_server};
-use martin_core::tiles::OptTileCache;
 #[cfg(feature = "pmtiles")]
 use martin_core::tiles::pmtiles::PmtCache;
 
@@ -32,30 +32,33 @@ pub use martin::{MartinError, MartinResult, config, logging};
 /// the task that created it, or run [`serve`] on a dedicated runtime/thread.
 pub type ServerFuture = Pin<Box<dyn Future<Output = MartinResult<()>>>>;
 
-/// Invalidates martin's caches when a tile file is replaced on disk, so the
-/// swapped source serves fresh content while other sources stay cached.
+/// Refreshes a source whose backing tile file was replaced on disk: the
+/// source is reloaded and its cached tiles invalidated, exactly like martin's
+/// own per-request modified detection, while other sources stay cached.
 /// Cheap to clone and safe to call from any thread.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct CacheInvalidator {
-    tiles: OptTileCache,
+    manager: TileSourceManager,
     #[cfg(feature = "pmtiles")]
     pmtiles_directories: PmtCache,
 }
 
 impl CacheInvalidator {
-    /// Drop cached tiles for `source_id`. The `PMTiles` directory cache is
-    /// cleared entirely (directories are re-read lazily and cheaply) because
-    /// its entries are not addressable per source. Pending cache maintenance
-    /// is flushed before returning, so subsequent reads see fresh content.
+    /// Reload `source_id` from disk and drop its cached tiles. The `PMTiles`
+    /// directory cache is cleared as well (directories are re-read lazily
+    /// and cheaply) because its entries are not addressable per source.
     pub async fn invalidate_source(&self, source_id: &str) {
-        if let Some(cache) = &self.tiles {
-            cache.invalidate_source(source_id);
-            cache.run_pending_tasks().await;
-        }
         #[cfg(feature = "pmtiles")]
         {
             self.pmtiles_directories.invalidate_all();
             self.pmtiles_directories.run_pending_tasks().await;
+        }
+        match self.manager.reload_source(source_id).await {
+            Ok(true) => {}
+            Ok(false) => {
+                tracing::warn!("Source '{source_id}' was not reloaded (unknown id or reload failed)");
+            }
+            Err(e) => tracing::warn!("Failed to apply reload for source '{source_id}': {e}"),
         }
     }
 }
@@ -75,7 +78,7 @@ pub async fn start(mut config: Config) -> MartinResult<(ServerFuture, String, Ca
     let resolver = IdResolver::new(RESERVED_KEYWORDS);
     let state = config.resolve(&resolver).await?;
     let invalidator = CacheInvalidator {
-        tiles: state.tile_manager.tile_cache().clone(),
+        manager: state.tile_manager.clone(),
         #[cfg(feature = "pmtiles")]
         pmtiles_directories: state.pmtiles_cache.clone(),
     };

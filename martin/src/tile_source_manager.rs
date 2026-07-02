@@ -67,6 +67,41 @@ impl TileSourceManager {
     pub fn tile_cache(&self) -> &OptTileCache {
         &self.tile_cache
     }
+
+    /// Reloads one source from its backing storage, e.g. after its file was
+    /// replaced on disk, invalidating its cached tiles in the process (the
+    /// same path the per-request modified detection takes).
+    ///
+    /// Returns `Ok(false)` when the source id is unknown or the reload
+    /// failed; reload failures are logged rather than propagated so callers
+    /// reacting to file events can simply retry on the next event.
+    pub async fn reload_source(&self, source_id: &str) -> MartinResult<bool> {
+        // Clone out of the map before awaiting so no shard lock is held.
+        let Some((source, process)) = self
+            .tile_sources
+            .get(source_id)
+            .map(|entry| (entry.value().0.clone_source(), entry.value().1.clone()))
+        else {
+            return Ok(false);
+        };
+        let fresh = match source.try_reload().await {
+            Ok(fresh) => fresh,
+            Err(e) => {
+                warn!(source.id = source_id, error = %e, "Failed to reload source");
+                return Ok(false);
+            }
+        };
+        let advisory = ReloadAdvisory {
+            updates: vec![crate::reload::NewSource {
+                id: source_id.to_string(),
+                source: Ok(fresh),
+                process,
+            }],
+            ..Default::default()
+        };
+        self.apply_changes(advisory).await?;
+        Ok(true)
+    }
 }
 
 impl Sink for TileSourceManager {
