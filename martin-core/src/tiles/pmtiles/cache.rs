@@ -28,6 +28,12 @@ impl PmtCache {
         info!("Invalidated all PMTiles directory cache entries");
     }
 
+    /// Runs pending maintenance so invalidations take effect before the next
+    /// read. Call after [`Self::invalidate_all`] when stale reads matter.
+    pub async fn run_pending_tasks(&self) {
+        self.0.run_pending_tasks().await;
+    }
+
     /// Creates a new `PMTiles` directory cache instance
     #[must_use]
     pub fn new(
