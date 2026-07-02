@@ -25,6 +25,7 @@ webui = ["martin/webui"]
 [dependencies]
 martin = { path = "../martin", default-features = false }
 martin-core = { path = "../martin-core", default-features = false }
+tracing.workspace = true
 
 [dev-dependencies]
 reqwest.workspace = true
