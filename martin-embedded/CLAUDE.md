@@ -2,9 +2,24 @@
 
 Thin wrapper crate for embedding the martin tile server inside another Rust
 application, aimed at statically compiled binaries that serve offline maps.
-This is the only crate added on top of upstream maplibre/martin; everything
-else in the workspace is unmodified so the fork rebases cleanly
-(`git fetch upstream && git rebase upstream/main`).
+This is the only crate added on top of upstream maplibre/martin; the rest of
+the workspace is otherwise unmodified so the fork rebases cleanly
+(`git fetch upstream && git rebase upstream/main`). The one other fork-local
+change is CI - see "Syncing with upstream" below.
+
+## Syncing with upstream
+
+CI is trimmed to a single workflow, `.github/workflows/embedded-ci.yml`, which
+only builds and tests this crate (`cargo build -p martin-embedded` /
+`cargo test -p martin-embedded`). All the inherited upstream workflows were
+deleted because they failed on the fork and emailed noise; `main` has no branch
+protection, so nothing gates on them.
+
+Every upstream pull re-adds or modifies those deleted workflow files. After each
+sync, re-delete everything under `.github/workflows/` except `embedded-ci.yml`
+(and keep the reused `.github/actions/setup-rust` action), plus
+`.github/dependabot.yml`. Do not re-enable workspace-wide clippy or tests - see
+"Known quirks".
 
 ## API
 
