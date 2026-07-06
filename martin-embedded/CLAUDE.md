@@ -2,9 +2,38 @@
 
 Thin wrapper crate for embedding the martin tile server inside another Rust
 application, aimed at statically compiled binaries that serve offline maps.
-This is the only crate added on top of upstream maplibre/martin; everything
-else in the workspace is unmodified so the fork rebases cleanly
-(`git fetch upstream && git rebase upstream/main`).
+This crate is the main addition on top of upstream maplibre/martin, but the
+fork also carries a few targeted changes to `martin` and `martin-core` that back
+this crate's API, plus a trimmed CI. Keep that diff small so the fork rebases
+cleanly (`git fetch upstream && git rebase upstream/main`); the full list is
+under "Syncing with upstream" below.
+
+## Syncing with upstream
+
+Everything the fork changes on top of `upstream/main`:
+
+- **This crate** - `martin-embedded/`, plus its registration in the workspace
+  `Cargo.toml` members and `Cargo.lock`.
+- **`srv.disable_signals`** (backs `config.srv.disable_signals`) -
+  `martin/src/config/file/srv.rs`, `martin/src/srv/server.rs`.
+- **Cache invalidation / `CacheInvalidator`** (backs
+  `CacheInvalidator::invalidate_source`) -
+  `martin-core/src/tiles/pmtiles/cache.rs`, `martin/src/tile_source_manager.rs`,
+  `martin/src/config/file/main/config.rs`,
+  `martin/src/config/file/main/lifecycle.rs`.
+- **CI** - reduced to a single workflow, `.github/workflows/embedded-ci.yml`,
+  which only builds and tests this crate (`cargo build -p martin-embedded` /
+  `cargo test -p martin-embedded`). All inherited upstream workflows were deleted
+  because they failed on the fork and emailed noise; `main` has no branch
+  protection, so nothing gates on them.
+
+The first three groups touch upstream files, so expect the occasional
+rebase/merge conflict there - resolve by keeping the fork's additions. Every
+upstream pull also re-adds or modifies the deleted workflow files: after each
+sync, re-delete everything under `.github/workflows/` except `embedded-ci.yml`
+(keep the reused `.github/actions/setup-rust` action) plus
+`.github/dependabot.yml`. Do not re-enable workspace-wide clippy or tests - see
+"Known quirks".
 
 ## API
 
