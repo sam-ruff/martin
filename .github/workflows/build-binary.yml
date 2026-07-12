@@ -1,0 +1,16 @@
+# Disabled on this fork: CI is reduced to embedded-ci.yml
+# (see martin-embedded/CLAUDE.md, "Syncing with upstream").
+# Inert stub so the upstream workflow never triggers; safe to delete.
+name: Build Binary
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  disabled:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'
