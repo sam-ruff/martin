@@ -16,7 +16,7 @@ defaults:
 jobs:
   build-test:
     name: Build and test martin-embedded
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, large, dedicated]
     permissions:
       contents: read
     steps:
