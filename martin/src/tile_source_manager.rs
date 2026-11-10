@@ -73,8 +73,10 @@ impl TileSourceManager {
     /// same path the per-request modified detection takes).
     ///
     /// Returns `Ok(false)` when the source id is unknown or the reload
-    /// failed; reload failures are logged rather than propagated so callers
-    /// reacting to file events can simply retry on the next event.
+    /// failed, which includes sources that cannot be reloaded; the source
+    /// and its cached tiles are then left as they were. Reload failures are
+    /// logged rather than propagated so callers reacting to file events can
+    /// simply retry on the next event.
     pub async fn reload_source(&self, source_id: &str) -> MartinResult<bool> {
         // Clone out of the map before awaiting so no shard lock is held.
         let Some((source, process)) = self
@@ -295,6 +297,25 @@ mod tests {
             ..Default::default()
         };
         mgr.apply_changes(update).await.unwrap();
+        assert_yaml_snapshot!(sorted_source_names(&mgr), @"- src_a");
+    }
+
+    /// `TestSource` keeps the default `try_reload`, like every source that cannot be reloaded.
+    #[tokio::test]
+    async fn reload_source_keeps_a_source_that_cannot_be_reloaded() {
+        let mgr = make_manager();
+        let add = ReloadAdvisory {
+            additions: vec![new_source("src_a")],
+            ..Default::default()
+        };
+        mgr.apply_changes(add).await.expect("the source is added");
+
+        let reloaded = mgr
+            .reload_source("src_a")
+            .await
+            .expect("a failed reload is reported, not raised");
+
+        assert!(!reloaded);
         assert_yaml_snapshot!(sorted_source_names(&mgr), @"- src_a");
     }
 

@@ -38,7 +38,7 @@ pub mod duckdb;
 pub mod passthrough;
 
 mod source;
-pub use source::{BoxedSource, Source, UrlQuery};
+pub use source::{BoxedSource, Source, UrlQuery, next_cache_epoch};
 
 mod error;
 pub use error::{MartinCoreError, MartinCoreResult};

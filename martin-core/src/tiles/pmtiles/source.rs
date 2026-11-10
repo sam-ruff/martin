@@ -13,7 +13,9 @@ use tracing::{trace, warn};
 use crate::CacheZoomRange;
 use crate::tiles::pmtiles::PmtCacheInstance;
 use crate::tiles::pmtiles::PmtilesError::{self, InvalidMetadata};
-use crate::tiles::{BoxedSource, MartinCoreError, MartinCoreResult, Source, UrlQuery};
+use crate::tiles::{
+    BoxedSource, MartinCoreError, MartinCoreResult, Source, UrlQuery, next_cache_epoch,
+};
 
 /// A source for `PMTiles` files using `ObjectStoreBackend`
 #[derive(Clone, Dbg)]
@@ -34,6 +36,9 @@ pub struct PmtilesSource {
     path: object_store::path::Path,
     #[dbg(skip)]
     pmt_cache: PmtCacheInstance,
+    /// Differs for every opened archive, so a reload does not read tiles cached from the old one.
+    #[dbg(skip)]
+    cache_epoch: u64,
 }
 
 impl PmtilesSource {
@@ -114,6 +119,7 @@ impl PmtilesSource {
             store,
             path,
             pmt_cache: cache,
+            cache_epoch: next_cache_epoch(),
         })
     }
 }
@@ -159,6 +165,10 @@ impl Source for PmtilesSource {
         self.cache_zoom
     }
 
+    fn cache_epoch(&self) -> u64 {
+        self.cache_epoch
+    }
+
     async fn get_tile(
         &self,
         xyz: TileCoord,
@@ -184,5 +194,36 @@ impl Source for PmtilesSource {
             );
             Ok(Vec::new())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use object_store::local::LocalFileSystem;
+
+    use super::*;
+    use crate::tiles::pmtiles::PmtCache;
+
+    #[tokio::test]
+    async fn a_reloaded_source_gets_its_own_cache_epoch() {
+        let fixture = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../tests/fixtures/pmtiles/png.pmtiles"
+        );
+        let path = object_store::path::Path::from_filesystem_path(fixture)
+            .expect("the fixture path is valid");
+        let source = PmtilesSource::new(
+            PmtCacheInstance::new_auto_id(PmtCache::default()),
+            "png".to_string(),
+            Box::new(LocalFileSystem::new()),
+            path,
+            CacheZoomRange::default(),
+        )
+        .await
+        .expect("the source opens");
+        let reloaded = source.try_reload().await.expect("the source reloads");
+
+        assert_eq!(source.cache_epoch(), source.clone_source().cache_epoch());
+        assert_ne!(source.cache_epoch(), reloaded.cache_epoch());
     }
 }

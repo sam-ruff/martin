@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use async_trait::async_trait;
 use martin_tile_utils::{TileCoord, TileData, TileInfo};
@@ -7,10 +8,17 @@ use tilejson::TileJSON;
 
 use crate::CacheZoomRange;
 use crate::tiles::catalog::CatalogSourceEntry;
-use crate::tiles::{MartinCoreResult, Tile};
+use crate::tiles::{MartinCoreError, MartinCoreResult, Tile};
 
 /// URL query parameters for dynamic tile generation.
 pub type UrlQuery = HashMap<String, String>;
+
+/// Returns a process-wide unique, non-zero value for [`Source::cache_epoch`].
+#[must_use]
+pub fn next_cache_epoch() -> u64 {
+    static NEXT_CACHE_EPOCH: AtomicU64 = AtomicU64::new(1);
+    NEXT_CACHE_EPOCH.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Core trait for tile sources providing data to Martin
 ///
@@ -48,6 +56,16 @@ pub trait Source: Send + Sync + Debug {
 
     /// Zoom-level bounds for tile caching.
     fn cache_zoom(&self) -> CacheZoomRange;
+
+    /// Identifies this source instance in tile cache keys, so that a reloaded source never
+    /// reads a tile cached by the instance it replaced. Default: 0.
+    ///
+    /// A source that can be replaced through [`try_reload()`](Self::try_reload) while its
+    /// tiles are cached should return a [`next_cache_epoch`] value that is taken at
+    /// construction and shared by clones, as the `MBTiles` and `PMTiles` sources do.
+    fn cache_epoch(&self) -> u64 {
+        0
+    }
 
     /// Retrieves tile data for the given coordinates.
     ///
@@ -89,9 +107,11 @@ pub trait Source: Send + Sync + Debug {
     /// Sources that return a `MartinCoreError::SourceNeedReload` from `get_tile()` must also
     /// implement this method.
     ///
-    /// The default implementation asserts.
+    /// The default implementation returns an error, for sources that cannot be reloaded.
     async fn try_reload(&self) -> MartinCoreResult<BoxedSource> {
-        unreachable!()
+        Err(MartinCoreError::OtherError(
+            format!("Source {} does not support reloading", self.get_id()).into(),
+        ))
     }
 
     /// Generates catalog entry for this source.
@@ -119,5 +139,84 @@ pub type BoxedSource = Box<dyn Source>;
 impl Clone for BoxedSource {
     fn clone(&self) -> Self {
         self.clone_source()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use martin_tile_utils::{Encoding, Format};
+    use tilejson::tilejson;
+
+    use super::*;
+
+    /// A source that relies on every default of the trait.
+    #[derive(Debug, Clone)]
+    struct DefaultsSource {
+        id: &'static str,
+        tilejson: TileJSON,
+    }
+
+    #[async_trait]
+    impl Source for DefaultsSource {
+        fn get_id(&self) -> &str {
+            self.id
+        }
+
+        fn get_tilejson(&self) -> &TileJSON {
+            &self.tilejson
+        }
+
+        fn get_tile_info(&self) -> TileInfo {
+            TileInfo::new(Format::Mvt, Encoding::Uncompressed)
+        }
+
+        fn clone_source(&self) -> BoxedSource {
+            Box::new(self.clone())
+        }
+
+        fn cache_zoom(&self) -> CacheZoomRange {
+            CacheZoomRange::default()
+        }
+
+        async fn get_tile(
+            &self,
+            _xyz: TileCoord,
+            _url_query: Option<&UrlQuery>,
+        ) -> MartinCoreResult<TileData> {
+            Ok(Vec::new())
+        }
+    }
+
+    fn defaults_source() -> DefaultsSource {
+        DefaultsSource {
+            id: "defaults",
+            tilejson: tilejson! { tiles: vec![] },
+        }
+    }
+
+    #[tokio::test]
+    async fn try_reload_fails_by_default() {
+        let err = defaults_source()
+            .try_reload()
+            .await
+            .expect_err("a source without try_reload cannot be reloaded");
+        assert_eq!(
+            err.to_string(),
+            "Source defaults does not support reloading"
+        );
+    }
+
+    #[test]
+    fn cache_epoch_is_zero_by_default() {
+        assert_eq!(defaults_source().cache_epoch(), 0);
+    }
+
+    #[test]
+    fn next_cache_epoch_never_repeats_or_returns_the_default() {
+        let first = next_cache_epoch();
+        let second = next_cache_epoch();
+        assert_ne!(first, 0);
+        assert_ne!(second, 0);
+        assert_ne!(first, second);
     }
 }
