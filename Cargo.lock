@@ -4842,6 +4842,8 @@ dependencies = [
  "martin",
  "martin-core",
  "reqwest 0.12.28",
+ "sqlx",
+ "tempfile",
  "tokio",
  "tracing",
 ]

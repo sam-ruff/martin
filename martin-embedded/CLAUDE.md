@@ -20,7 +20,10 @@ Everything the fork changes on top of `upstream/main`:
   `CacheInvalidator::invalidate_source`) -
   `martin-core/src/tiles/pmtiles/cache.rs`, `martin/src/tile_source_manager.rs`,
   `martin/src/config/file/main/config.rs`,
-  `martin/src/config/file/main/lifecycle.rs`.
+  `martin/src/config/file/main/lifecycle.rs`, and `MbtSource::try_reload` in
+  `martin-core/src/tiles/mbtiles/source.rs`. Invalidation reloads the source,
+  so it only works for source types that implement `Source::try_reload`
+  (`PMTiles` and `MBTiles`); the upstream default panics.
 - **CI** - reduced to a single workflow, `.github/workflows/embedded-ci.yml`,
   which only builds and tests this crate (`cargo build -p martin-embedded` /
   `cargo test -p martin-embedded`). All inherited upstream workflows were deleted
@@ -93,5 +96,5 @@ cargo zigbuild -p martin-embedded --example serve --release --target x86_64-unkn
 - `cargo clippy -p martin` under this non-default feature combination shows a
   handful of pre-existing upstream warnings (feature-gating gaps). They are
   left unfixed on purpose to keep the diff against upstream minimal.
-- The integration test binds a fixed port (3199); it will fail if that port is
-  taken.
+- The integration tests bind fixed ports (3198 and 3199); they will fail if
+  those ports are taken.

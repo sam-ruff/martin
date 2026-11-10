@@ -16,7 +16,7 @@ use tracing::{trace, warn};
 
 use crate::CacheZoomRange;
 use crate::tiles::mbtiles::MbtilesError;
-use crate::tiles::{BoxedSource, MartinCoreResult, Source, UrlQuery};
+use crate::tiles::{BoxedSource, MartinCoreError, MartinCoreResult, Source, UrlQuery};
 
 /// Tile source that reads from `MBTiles` files.
 #[derive(Clone, Dbg)]
@@ -30,6 +30,9 @@ pub struct MbtSource {
     tile_info: TileInfo,
     #[dbg(skip)]
     cache_zoom: CacheZoomRange,
+    /// Kept so [`try_reload`](Source::try_reload) can reopen the file.
+    #[dbg(skip)]
+    path: PathBuf,
 }
 
 // SQLITE_BUSY (code: 5)
@@ -83,7 +86,7 @@ impl MbtSource {
             .detect_format(&meta.tilejson)
             .await
             .and_then(|v| v.ok_or(MbtError::NoTilesFound))
-            .map_err(|e| MbtilesError::InvalidMetadata(e.to_string(), path))?;
+            .map_err(|e| MbtilesError::InvalidMetadata(e.to_string(), path.clone()))?;
 
         Ok(Self {
             id,
@@ -91,6 +94,7 @@ impl MbtSource {
             tilejson: meta.tilejson,
             tile_info,
             cache_zoom,
+            path,
         })
     }
 }
@@ -124,6 +128,13 @@ impl Source for MbtSource {
 
     fn cache_zoom(&self) -> CacheZoomRange {
         self.cache_zoom
+    }
+
+    async fn try_reload(&self) -> MartinCoreResult<BoxedSource> {
+        Self::new(self.id.clone(), self.path.clone(), self.cache_zoom)
+            .await
+            .map(|source| Box::new(source) as BoxedSource)
+            .map_err(MartinCoreError::from)
     }
 
     async fn get_tile(
