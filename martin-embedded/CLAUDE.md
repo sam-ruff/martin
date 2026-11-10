@@ -91,6 +91,10 @@ What a caller of `CacheInvalidator::invalidate_source` needs to know:
 - An `MBTiles` replacement that a writer still has locked makes the call wait
   for about a minute before it gives up and keeps the old source. Do not await
   it on a latency-sensitive task.
+- Await one call for a source before starting the next for the same source.
+  Reloads take effect in the order they finish, not the order they were
+  started, so overlapping calls can leave an older file being served. Nothing
+  in the crate serialises them yet.
 - Only `MBTiles` and `PMTiles` sources reload. For any other source, an unknown
   id or a file that cannot be opened, the call logs a warning and leaves the
   source and its cached tiles alone. A source left on a bad file still serves

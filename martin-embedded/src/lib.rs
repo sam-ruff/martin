@@ -63,6 +63,10 @@ impl CacheInvalidator {
     /// An `MBTiles` replacement that a writer still has locked makes this
     /// wait, for about a minute, before it gives up and keeps the old
     /// source, so do not await it on a latency-sensitive task.
+    ///
+    /// Calls for the same source must not overlap: await one before starting
+    /// the next. Reloads take effect in the order they finish, so a call
+    /// that was held up can put an older file back over a newer one.
     pub async fn invalidate_source(&self, source_id: &str) {
         #[cfg(feature = "pmtiles")]
         {

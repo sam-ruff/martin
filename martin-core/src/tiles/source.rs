@@ -60,8 +60,9 @@ pub trait Source: Send + Sync + Debug {
     /// Identifies this source instance in tile cache keys, so that a reloaded source never
     /// reads a tile cached by the instance it replaced. Default: 0.
     ///
-    /// Sources implementing [`try_reload()`](Self::try_reload) should return a
-    /// [`next_cache_epoch`] value that is taken at construction and shared by clones.
+    /// A source that can be replaced through [`try_reload()`](Self::try_reload) while its
+    /// tiles are cached should return a [`next_cache_epoch`] value that is taken at
+    /// construction and shared by clones, as the `MBTiles` and `PMTiles` sources do.
     fn cache_epoch(&self) -> u64 {
         0
     }

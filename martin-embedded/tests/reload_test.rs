@@ -97,7 +97,7 @@ impl TileClient {
         response.text().await.expect("the tile has a text body")
     }
 
-    /// Polls until `zxy` is served, then returns it.
+    /// Polls while `zxy` is answered with a server error, then returns it.
     async fn tile_once_served(&self, zxy: &str) -> String {
         let deadline = Instant::now() + WAIT_TIMEOUT;
         loop {
@@ -106,6 +106,7 @@ impl TileClient {
             if status.is_success() {
                 return response.text().await.expect("the tile has a text body");
             }
+            assert!(status.is_server_error(), "{zxy} was answered with {status}");
             assert!(
                 Instant::now() < deadline,
                 "{zxy} is still answered with {status}"
