@@ -479,6 +479,7 @@ impl<'a> DynTileSource<'a> {
                 .get_or_insert(
                     martin_core::tiles::TileCacheKey::new(
                         src_id,
+                        s.cache_epoch(),
                         xyz,
                         self.query_str.map(ToString::to_string),
                         self.accepted_format,
@@ -730,10 +731,18 @@ pub fn to_encoding(val: ContentEncoding) -> Option<Encoding> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use actix_http::header::TryIntoHeaderValue as _;
     use actix_web::http::header::QualityItem;
+    use async_trait::async_trait;
+    use futures::future::join;
+    use martin_core::CacheZoomRange;
+    use martin_core::tiles::{MartinCoreResult, Source};
+    use martin_tile_utils::TileData;
     use rstest::rstest;
-    use tilejson::tilejson;
+    use tilejson::{TileJSON, tilejson};
+    use tokio::sync::Notify;
 
     use super::*;
     use crate::config::file::OnInvalid;
@@ -883,6 +892,130 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(tile.data, vec![1, 2, 3]);
+    }
+
+    /// Lets a test hold a source inside `get_tile` and release it on demand.
+    #[derive(Debug, Default)]
+    struct Gate {
+        entered: Notify,
+        release: Notify,
+    }
+
+    /// A source with its own cache epoch, whose `get_tile` a [`Gate`] can hold open.
+    #[derive(Debug, Clone)]
+    struct EpochTestSource {
+        id: &'static str,
+        tj: TileJSON,
+        data: TileData,
+        epoch: u64,
+        gate: Option<Arc<Gate>>,
+    }
+
+    #[async_trait]
+    impl Source for EpochTestSource {
+        fn get_id(&self) -> &str {
+            self.id
+        }
+
+        fn get_tilejson(&self) -> &TileJSON {
+            &self.tj
+        }
+
+        fn get_tile_info(&self) -> TileInfo {
+            TileInfo::new(Format::Mvt, Encoding::Uncompressed)
+        }
+
+        fn clone_source(&self) -> BoxedSource {
+            Box::new(self.clone())
+        }
+
+        fn cache_zoom(&self) -> CacheZoomRange {
+            CacheZoomRange::default()
+        }
+
+        fn cache_epoch(&self) -> u64 {
+            self.epoch
+        }
+
+        async fn get_tile(
+            &self,
+            _xyz: TileCoord,
+            _url_query: Option<&UrlQuery>,
+        ) -> MartinCoreResult<TileData> {
+            if let Some(gate) = &self.gate {
+                gate.entered.notify_one();
+                gate.release.notified().await;
+            }
+            Ok(self.data.clone())
+        }
+    }
+
+    /// A request that picked its source up before a reload can finish, and cache its tile,
+    /// after the reload has invalidated the cache. The reloaded source must not be served
+    /// that tile.
+    #[actix_rt::test]
+    async fn test_reloaded_source_ignores_tile_cached_by_replaced_instance() {
+        let source_id = "reloadable";
+        let xyz = TileCoord { z: 0, x: 0, y: 0 };
+        let gate = Arc::new(Gate::default());
+        let replaced = EpochTestSource {
+            id: source_id,
+            tj: tilejson! { tiles: vec![] },
+            data: vec![1],
+            epoch: 1,
+            gate: Some(Arc::clone(&gate)),
+        };
+        let reloaded = EpochTestSource {
+            data: vec![2],
+            epoch: 2,
+            gate: None,
+            ..replaced.clone()
+        };
+        let mgr = TileSourceManager::from_sources(
+            Some(TileCache::new(1024 * 1024, None, None)),
+            OnInvalid::Abort,
+            vec![vec![(Box::new(replaced), ProcessConfig::default())]],
+        );
+
+        let in_flight =
+            DynTileSource::new(&mgr, source_id, None, "", TileRequestHeaders::default())
+                .expect("the source is registered");
+        let reload = async {
+            gate.entered.notified().await;
+            let advisory = ReloadAdvisory {
+                updates: vec![NewSource {
+                    id: source_id.to_string(),
+                    source: Ok(Box::new(reloaded)),
+                    process: ProcessConfig::default(),
+                }],
+                ..Default::default()
+            };
+            mgr.apply_changes(advisory)
+                .await
+                .expect("the reloaded source is applied");
+            gate.release.notify_one();
+        };
+        let (in_flight_tile, ()) = tokio::time::timeout(
+            Duration::from_secs(15),
+            join(in_flight.get_tile_content(xyz), reload),
+        )
+        .await
+        .expect("the in-flight request finishes once the gate releases it");
+        let in_flight_tile = in_flight_tile.expect("the in-flight request is served");
+        assert_eq!(in_flight_tile.data, vec![1]);
+
+        let after_reload =
+            DynTileSource::new(&mgr, source_id, None, "", TileRequestHeaders::default())
+                .expect("the source is still registered");
+        let tile = after_reload
+            .get_tile_content(xyz)
+            .await
+            .expect("the reloaded source serves the tile");
+        assert_eq!(
+            tile.data,
+            vec![2],
+            "the reloaded source was served a tile cached by the instance it replaced"
+        );
     }
 
     fn compress_with(data: &[u8], encoding: Encoding) -> Vec<u8> {

@@ -28,3 +28,8 @@ jobs:
         run: cargo build -p martin-embedded
       - name: Test martin-embedded
         run: cargo test -p martin-embedded
+      # The fork's changes inside martin-core and martin have unit tests there.
+      - name: Test the fork's changes in martin-core
+        run: cargo test -p martin-core --lib --no-default-features --features mbtiles,pmtiles,fonts,sprites,styles -- reload epoch
+      - name: Test the fork's changes in martin
+        run: cargo test -p martin --lib --no-default-features --features mbtiles,pmtiles,fonts,sprites,styles reload

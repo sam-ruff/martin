@@ -114,7 +114,7 @@ async fn wait_and_flush(cache: &TileCache, duration: Duration) {
 }
 
 fn key(source: &str, xyz: TileCoord, query: Option<&str>, format: Option<Format>) -> TileCacheKey {
-    TileCacheKey::new(source.into(), xyz, query.map(Into::into), format)
+    TileCacheKey::new(source.into(), 0, xyz, query.map(Into::into), format)
 }
 
 async fn insert(

@@ -16,7 +16,9 @@ use tracing::{trace, warn};
 
 use crate::CacheZoomRange;
 use crate::tiles::mbtiles::MbtilesError;
-use crate::tiles::{BoxedSource, MartinCoreError, MartinCoreResult, Source, UrlQuery};
+use crate::tiles::{
+    BoxedSource, MartinCoreError, MartinCoreResult, Source, UrlQuery, next_cache_epoch,
+};
 
 /// Tile source that reads from `MBTiles` files.
 #[derive(Clone, Dbg)]
@@ -33,6 +35,9 @@ pub struct MbtSource {
     /// Kept so [`try_reload`](Source::try_reload) can reopen the file.
     #[dbg(skip)]
     path: PathBuf,
+    /// Differs for every opened file, so a reload does not read tiles cached from the old one.
+    #[dbg(skip)]
+    cache_epoch: u64,
 }
 
 // SQLITE_BUSY (code: 5)
@@ -95,6 +100,7 @@ impl MbtSource {
             tile_info,
             cache_zoom,
             path,
+            cache_epoch: next_cache_epoch(),
         })
     }
 }
@@ -130,6 +136,10 @@ impl Source for MbtSource {
         self.cache_zoom
     }
 
+    fn cache_epoch(&self) -> u64 {
+        self.cache_epoch
+    }
+
     async fn try_reload(&self) -> MartinCoreResult<BoxedSource> {
         Self::new(self.id.clone(), self.path.clone(), self.cache_zoom)
             .await
@@ -156,5 +166,25 @@ impl Source for MbtSource {
             );
             Ok(Vec::new())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use mbtiles::temp_named_mbtiles;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn a_reloaded_source_gets_its_own_cache_epoch() {
+        let script = include_str!("../../../../tests/fixtures/mbtiles/json.sql");
+        let (_mbt, _conn, path) = temp_named_mbtiles("mbt_source_cache_epoch", script).await;
+        let source = MbtSource::new("json".to_string(), path, CacheZoomRange::default())
+            .await
+            .expect("the source opens");
+        let reloaded = source.try_reload().await.expect("the source reloads");
+
+        assert_eq!(source.cache_epoch(), source.clone_source().cache_epoch());
+        assert_ne!(source.cache_epoch(), reloaded.cache_epoch());
     }
 }

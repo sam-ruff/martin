@@ -47,6 +47,22 @@ impl CacheInvalidator {
     /// Reload `source_id` from disk and drop its cached tiles. The `PMTiles`
     /// directory cache is cleared as well (directories are re-read lazily
     /// and cheaply) because its entries are not addressable per source.
+    ///
+    /// Put the finished file in place first, by renaming it over the old
+    /// one, and call this afterwards. Whatever is at the path is served as
+    /// soon as it opens, and an `MBTiles` file that has its schema but not
+    /// all of its tiles yet does open.
+    ///
+    /// Only `MBTiles` and `PMTiles` sources can be reloaded. For any other
+    /// source, an unknown id or a replacement that cannot be opened, this
+    /// logs a warning and leaves the source and its cached tiles as they
+    /// were. A source left on a bad file keeps serving its cached tiles but
+    /// can fail to read others, until a valid file is in place and
+    /// invalidated.
+    ///
+    /// An `MBTiles` replacement that a writer still has locked makes this
+    /// wait, for about a minute, before it gives up and keeps the old
+    /// source, so do not await it on a latency-sensitive task.
     pub async fn invalidate_source(&self, source_id: &str) {
         #[cfg(feature = "pmtiles")]
         {
